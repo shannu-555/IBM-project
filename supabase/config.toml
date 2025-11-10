@@ -1,1 +1,13 @@
 project_id = "ogjueogookbvbgyxubtu"
+
+[functions.whatsapp-webhook]
+verify_jwt = false
+
+[functions.gmail-webhook]
+verify_jwt = true
+
+[functions.send-whatsapp-reply]
+verify_jwt = true
+
+[functions.send-gmail-reply]
+verify_jwt = true
