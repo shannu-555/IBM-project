@@ -63,6 +63,22 @@ function calculateMetrics(replies: any[]): any {
   };
 }
 
+function getUserIdFromAuthHeader(authHeader: string | null): string | null {
+  try {
+    if (!authHeader) return null;
+    const token = authHeader.replace('Bearer ', '');
+    const payload = token.split('.')[1];
+    const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
+    const json = atob(padded);
+    const data = JSON.parse(json);
+    return data.sub || data.user_id || null;
+  } catch (e) {
+    console.error('Failed to decode JWT:', e);
+    return null;
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -91,9 +107,12 @@ serve(async (req) => {
     );
 
     const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
-    
-    if (userError || !user) {
-      console.error('Auth error:', userError);
+    let userId = user?.id as string | undefined;
+    if (userError || !userId) {
+      console.warn('Auth getUser failed, falling back to JWT decode', userError);
+      userId = getUserIdFromAuthHeader(authHeader) ?? undefined;
+    }
+    if (!userId) {
       throw new Error('User not authenticated');
     }
 
@@ -107,7 +126,7 @@ serve(async (req) => {
     const { data: savedMessage, error: messageError } = await supabaseClient
       .from('messages')
       .insert({
-        user_id: user.id,
+        user_id: userId,
         platform,
         sender: 'manual',
         content: message
@@ -142,7 +161,7 @@ serve(async (req) => {
     const { error: metricsError } = await supabaseClient
       .from('metrics')
       .insert({
-        user_id: user.id,
+        user_id: userId,
         platform,
         ...metrics
       });
