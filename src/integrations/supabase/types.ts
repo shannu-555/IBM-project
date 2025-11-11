@@ -14,7 +14,110 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      messages: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          message_id: string | null
+          platform: string
+          sender: string
+          thread_id: string | null
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          message_id?: string | null
+          platform: string
+          sender: string
+          thread_id?: string | null
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          message_id?: string | null
+          platform?: string
+          sender?: string
+          thread_id?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      metrics: {
+        Row: {
+          accuracy: number | null
+          created_at: string
+          f1_score: number | null
+          id: string
+          platform: string
+          precision_score: number | null
+          recall_score: number | null
+          user_id: string
+        }
+        Insert: {
+          accuracy?: number | null
+          created_at?: string
+          f1_score?: number | null
+          id?: string
+          platform: string
+          precision_score?: number | null
+          recall_score?: number | null
+          user_id: string
+        }
+        Update: {
+          accuracy?: number | null
+          created_at?: string
+          f1_score?: number | null
+          id?: string
+          platform?: string
+          precision_score?: number | null
+          recall_score?: number | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      replies: {
+        Row: {
+          confidence: number | null
+          content: string
+          created_at: string
+          id: string
+          is_sent: boolean | null
+          message_id: string
+          tone: string
+        }
+        Insert: {
+          confidence?: number | null
+          content: string
+          created_at?: string
+          id?: string
+          is_sent?: boolean | null
+          message_id: string
+          tone: string
+        }
+        Update: {
+          confidence?: number | null
+          content?: string
+          created_at?: string
+          id?: string
+          is_sent?: boolean | null
+          message_id?: string
+          tone?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "replies_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

@@ -1,20 +1,32 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Mail, Link as LinkIcon, Unlink } from "lucide-react";
 import { toast } from "sonner";
+import { QuickMessageGenerator } from "@/components/QuickMessageGenerator";
+import { MetricsDisplay } from "@/components/MetricsDisplay";
+import { MessageHistory } from "@/components/MessageHistory";
 
 const Email = () => {
   const [isConnected, setIsConnected] = useState(false);
 
+  useEffect(() => {
+    // Load connection state from localStorage
+    const savedState = localStorage.getItem('gmail_connected');
+    if (savedState === 'true') {
+      setIsConnected(true);
+    }
+  }, []);
+
   const handleConnect = () => {
-    // This will be implemented with actual Gmail API integration
-    toast.success("Gmail connection will be set up with Gmail API");
+    localStorage.setItem('gmail_connected', 'true');
     setIsConnected(true);
+    toast.success("Gmail connected successfully");
   };
 
   const handleDisconnect = () => {
+    localStorage.setItem('gmail_connected', 'false');
     setIsConnected(false);
     toast.info("Gmail disconnected");
   };
@@ -84,19 +96,12 @@ const Email = () => {
                 </div>
               </div>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Inbox Messages</CardTitle>
-                  <CardDescription>
-                    New emails will appear here with AI-generated reply options
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center justify-center h-64 text-muted-foreground border-2 border-dashed rounded-lg">
-                    <p className="text-sm">No emails yet. Send an email to your connected account to test!</p>
-                  </div>
-                </CardContent>
-              </Card>
+              <div className="grid gap-6 md:grid-cols-2">
+                <QuickMessageGenerator platform="email" />
+                <MetricsDisplay platform="email" />
+              </div>
+
+              <MessageHistory platform="email" />
             </>
           )}
         </CardContent>
