@@ -9,45 +9,87 @@ const corsHeaders = {
 async function generateGeminiReplies(messageText: string, language: string = 'auto'): Promise<any[]> {
   const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
   
-  const prompt = `Generate 3 context-aware replies for this message${language !== 'auto' ? ` in ${language}` : ''}.
-Tone 1: Formal
-Tone 2: Semi-formal  
-Tone 3: Friendly
+  const prompt = `You are an intelligent communication assistant. Analyze the following message and perform these tasks:
 
-Message: ${messageText}
+1. DETECT THE TONE: Identify the emotional tone and intent (e.g., Friendly, Formal, Urgent, Emotional, Casual, Negative/Complaint, Positive/Appreciative, Professional, Polite).
 
-Respond with a JSON array of 3 replies, each with: tone, text, confidence (0-1).`;
+2. GENERATE 3 CONTEXT-AWARE REPLIES: Create 3 short, natural, and human-like replies that:
+   - Match the detected tone and sentiment of the original message
+   - Feel personal and contextually relevant
+   - Are concise and actionable
+   - Maintain the same emotional energy as the input
+
+Message: "${messageText}"
+
+${language !== 'auto' ? `Generate replies in ${language} language.` : 'Generate replies in the same language as the input message.'}
+
+Return ONLY a valid JSON array with this exact structure:
+[
+  {
+    "tone": "detected tone category",
+    "text": "first reply text",
+    "confidence": 0.9
+  },
+  {
+    "tone": "detected tone category",
+    "text": "second reply text",
+    "confidence": 0.85
+  },
+  {
+    "tone": "detected tone category",
+    "text": "third reply text",
+    "confidence": 0.8
+  }
+]
+
+Important: All 3 replies should match the detected tone. Make replies natural, empathetic, and contextually intelligent.`;
 
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{
           parts: [{ text: prompt }]
-        }]
+        }],
+        generationConfig: {
+          temperature: 0.7,
+          topK: 40,
+          topP: 0.95,
+          maxOutputTokens: 1024,
+        }
       })
     }
   );
 
   const data = await response.json();
-  console.log('Gemini API response:', data);
+  console.log('Gemini API response:', JSON.stringify(data, null, 2));
   
   try {
-    const responseText = data.candidates[0].content.parts[0].text;
-    const jsonMatch = responseText.match(/\[[\s\S]*\]/);
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]);
+    if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
+      const responseText = data.candidates[0].content.parts[0].text;
+      console.log('Gemini response text:', responseText);
+      
+      // Extract JSON array from response
+      const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        const replies = JSON.parse(jsonMatch[0]);
+        console.log('Parsed replies:', replies);
+        return replies;
+      }
     }
+    
+    console.warn('Could not extract valid JSON from Gemini response');
   } catch (e) {
     console.error('Error parsing Gemini response:', e);
   }
   
+  // Fallback replies
   return [
-    { tone: 'Formal', text: 'Thank you for your message. I will respond shortly.', confidence: 0.8 },
-    { tone: 'Semi-formal', text: 'Thanks for reaching out! I\'ll get back to you soon.', confidence: 0.8 },
-    { tone: 'Friendly', text: 'Hey! Got your message, will reply soon! 😊', confidence: 0.8 }
+    { tone: 'Neutral', text: 'Thank you for your message. I will respond shortly.', confidence: 0.7 },
+    { tone: 'Neutral', text: 'I appreciate you reaching out. Let me get back to you soon.', confidence: 0.7 },
+    { tone: 'Neutral', text: 'Got your message! I\'ll reply as soon as possible.', confidence: 0.7 }
   ];
 }
 
