@@ -9,40 +9,55 @@ const corsHeaders = {
 async function generateGeminiReplies(messageText: string, language: string = 'auto'): Promise<any[]> {
   const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
   
-  const prompt = `You are an intelligent communication assistant. Analyze the following message and perform these tasks:
+  const prompt = `You are a realistic human communication assistant. Your job is to respond naturally like a real person would in a conversation.
 
-1. DETECT THE TONE: Identify the emotional tone and intent (e.g., Friendly, Formal, Urgent, Emotional, Casual, Negative/Complaint, Positive/Appreciative, Professional, Polite).
+ANALYZE THIS MESSAGE:
+"${messageText}"
 
-2. GENERATE 3 CONTEXT-AWARE REPLIES: Create 3 short, natural, and human-like replies that:
-   - Match the detected tone and sentiment of the original message
-   - Feel personal and contextually relevant
-   - Are concise and actionable
-   - Maintain the same emotional energy as the input
+STEP 1 - Understand the Context:
+- What is the sender really asking or saying?
+- What emotion or tone are they expressing? (casual, urgent, friendly, professional, confused, upset, excited, romantic, etc.)
+- What kind of relationship does this message suggest? (friend, colleague, family, stranger, romantic interest)
 
-Message: "${messageText}"
+STEP 2 - Generate 3 DISTINCT, NATURAL Replies:
+- Each reply MUST sound like a real human wrote it in casual conversation
+- VARY the structure completely - don't repeat patterns
+- Match the sender's energy level and tone
+- Keep replies SHORT (1-2 sentences max)
+- Use natural language, contractions, and casual phrasing when appropriate
+- Add emojis ONLY if the original message feels casual/friendly (not for formal/professional messages)
+- Each reply should offer a slightly different response angle or personality
 
-${language !== 'auto' ? `Generate replies in ${language} language.` : 'Generate replies in the same language as the input message.'}
+CRITICAL RULES:
+❌ NEVER use corporate language like "I will respond shortly" or "Thank you for your message"
+❌ NEVER make all 3 replies follow the same structure
+❌ NEVER sound robotic or templated
+✅ Sound conversational, natural, and human
+✅ Mirror the sender's communication style
+✅ Be contextually intelligent about the situation
 
-Return ONLY a valid JSON array with this exact structure:
+${language !== 'auto' ? `Reply in ${language} language.` : 'Reply in the same language as the message.'}
+
+OUTPUT FORMAT - Return ONLY valid JSON:
 [
   {
-    "tone": "detected tone category",
-    "text": "first reply text",
+    "tone": "brief tone label",
+    "text": "first natural reply",
     "confidence": 0.9
   },
   {
-    "tone": "detected tone category",
-    "text": "second reply text",
+    "tone": "brief tone label",
+    "text": "second varied reply",
     "confidence": 0.85
   },
   {
-    "tone": "detected tone category",
-    "text": "third reply text",
+    "tone": "brief tone label",
+    "text": "third different reply",
     "confidence": 0.8
   }
 ]
 
-Important: All 3 replies should match the detected tone. Make replies natural, empathetic, and contextually intelligent.`;
+Make each reply feel genuine and conversational.`;
 
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
