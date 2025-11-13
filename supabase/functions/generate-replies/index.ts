@@ -9,55 +9,48 @@ const corsHeaders = {
 async function generateGeminiReplies(messageText: string, language: string = 'auto'): Promise<any[]> {
   const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
   
-  const prompt = `You are a realistic human communication assistant. Your job is to respond naturally like a real person would in a conversation.
+  const prompt = `You are an expert conversational assistant. Your job is to generate natural, human-like replies that match the tone, emotion, and intent of the user's message. Avoid robotic phrases, avoid formal templates, avoid generic responses, avoid corporate language. Mimic how real people text. Keep replies short, casual, expressive when appropriate, and context-aware. Always mirror the emotional tone of the sender.
 
-ANALYZE THIS MESSAGE:
+Analyze this message VERY deeply. Understand the intent, tone, context, and emotional expression:
 "${messageText}"
 
-STEP 1 - Understand the Context:
-- What is the sender really asking or saying?
-- What emotion or tone are they expressing? (casual, urgent, friendly, professional, confused, upset, excited, romantic, etc.)
-- What kind of relationship does this message suggest? (friend, colleague, family, stranger, romantic interest)
+Then create 3 completely different natural replies that sound like a human text message.
 
-STEP 2 - Generate 3 DISTINCT, NATURAL Replies:
-- Each reply MUST sound like a real human wrote it in casual conversation
-- VARY the structure completely - don't repeat patterns
-- Match the sender's energy level and tone
-- Keep replies SHORT (1-2 sentences max)
-- Use natural language, contractions, and casual phrasing when appropriate
-- Add emojis ONLY if the original message feels casual/friendly (not for formal/professional messages)
-- Each reply should offer a slightly different response angle or personality
-
-CRITICAL RULES:
-❌ NEVER use corporate language like "I will respond shortly" or "Thank you for your message"
-❌ NEVER make all 3 replies follow the same structure
-❌ NEVER sound robotic or templated
-✅ Sound conversational, natural, and human
-✅ Mirror the sender's communication style
-✅ Be contextually intelligent about the situation
+STRICT RULES YOU MUST FOLLOW:
+❌ NEVER use: "Thank you for your message", "I will respond shortly", "Got your message", "I appreciate", "I'll get back to you"
+❌ NEVER be formal unless the message is clearly formal/professional
+❌ NEVER repeat the same reply structure or pattern
+❌ NEVER use corporate or robotic language
+❌ NEVER apologize unless contextually appropriate
+✅ DO sound like a real person texting casually
+✅ DO match the sender's emotional energy exactly
+✅ DO keep replies SHORT (1-2 sentences maximum)
+✅ DO use contractions and natural language
+✅ DO add emojis ONLY if the message feels casual/friendly (NOT for formal messages)
+✅ DO make each reply feel spontaneous and different
 
 ${language !== 'auto' ? `Reply in ${language} language.` : 'Reply in the same language as the message.'}
 
-OUTPUT FORMAT - Return ONLY valid JSON:
+Return ONLY valid JSON in this format:
 [
   {
-    "tone": "brief tone label",
-    "text": "first natural reply",
+    "tone": "casual/friendly/urgent/professional/etc",
+    "text": "first natural conversational reply",
     "confidence": 0.9
   },
   {
-    "tone": "brief tone label",
-    "text": "second varied reply",
+    "tone": "same tone as detected",
+    "text": "second completely different reply",
     "confidence": 0.85
   },
   {
-    "tone": "brief tone label",
-    "text": "third different reply",
+    "tone": "same tone as detected",
+    "text": "third unique reply with different angle",
     "confidence": 0.8
   }
 ]
 
-Make each reply feel genuine and conversational.`;
+Remember: Sound human, not robotic. Be natural, not formal. Be conversational, not corporate.`;
 
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,

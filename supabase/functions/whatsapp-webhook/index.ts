@@ -15,45 +15,93 @@ interface TwilioMessage {
 async function generateGeminiReplies(messageText: string, language: string = 'auto'): Promise<any[]> {
   const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
   
-  const prompt = `Generate 3 context-aware replies for this WhatsApp message${language !== 'auto' ? ` in ${language}` : ''}.
-Tone 1: Formal
-Tone 2: Semi-formal  
-Tone 3: Friendly
+  const prompt = `You are an expert conversational assistant. Your job is to generate natural, human-like replies that match the tone, emotion, and intent of the user's message. Avoid robotic phrases, avoid formal templates, avoid generic responses, avoid corporate language. Mimic how real people text. Keep replies short, casual, expressive when appropriate, and context-aware. Always mirror the emotional tone of the sender.
 
-Message: ${messageText}
+Analyze this message VERY deeply. Understand the intent, tone, context, and emotional expression:
+"${messageText}"
 
-Respond with a JSON array of 3 replies, each with: tone, text, confidence (0-1).`;
+Then create 3 completely different natural replies that sound like a human text message.
+
+STRICT RULES YOU MUST FOLLOW:
+❌ NEVER use: "Thank you for your message", "I will respond shortly", "Got your message", "I appreciate", "I'll get back to you"
+❌ NEVER be formal unless the message is clearly formal/professional
+❌ NEVER repeat the same reply structure or pattern
+❌ NEVER use corporate or robotic language
+❌ NEVER apologize unless contextually appropriate
+✅ DO sound like a real person texting casually
+✅ DO match the sender's emotional energy exactly
+✅ DO keep replies SHORT (1-2 sentences maximum)
+✅ DO use contractions and natural language
+✅ DO add emojis ONLY if the message feels casual/friendly (NOT for formal messages)
+✅ DO make each reply feel spontaneous and different
+
+${language !== 'auto' ? `Reply in ${language} language.` : 'Reply in the same language as the message.'}
+
+Return ONLY valid JSON in this format:
+[
+  {
+    "tone": "casual/friendly/urgent/professional/etc",
+    "text": "first natural conversational reply",
+    "confidence": 0.9
+  },
+  {
+    "tone": "same tone as detected",
+    "text": "second completely different reply",
+    "confidence": 0.85
+  },
+  {
+    "tone": "same tone as detected",
+    "text": "third unique reply with different angle",
+    "confidence": 0.8
+  }
+]
+
+Remember: Sound human, not robotic. Be natural, not formal. Be conversational, not corporate.`;
 
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{
           parts: [{ text: prompt }]
-        }]
+        }],
+        generationConfig: {
+          temperature: 0.7,
+          topK: 40,
+          topP: 0.95,
+          maxOutputTokens: 1024,
+        }
       })
     }
   );
 
   const data = await response.json();
-  console.log('Gemini API response:', data);
+  console.log('Gemini API response:', JSON.stringify(data, null, 2));
   
   try {
-    const responseText = data.candidates[0].content.parts[0].text;
-    const jsonMatch = responseText.match(/\[[\s\S]*\]/);
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]);
+    if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
+      const responseText = data.candidates[0].content.parts[0].text;
+      console.log('Gemini response text:', responseText);
+      
+      const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        const replies = JSON.parse(jsonMatch[0]);
+        console.log('Parsed replies:', replies);
+        return replies;
+      }
     }
+    
+    console.warn('Could not extract valid JSON from Gemini response');
   } catch (e) {
     console.error('Error parsing Gemini response:', e);
   }
   
   return [
-    { tone: 'Formal', text: 'Thank you for your message. I will respond shortly.', confidence: 0.8 },
-    { tone: 'Semi-formal', text: 'Thanks for reaching out! I\'ll get back to you soon.', confidence: 0.8 },
-    { tone: 'Friendly', text: 'Hey! Got your message, will reply soon! 😊', confidence: 0.8 }
+    { tone: 'Neutral', text: 'Yeah, I got it. What do you need?', confidence: 0.7 },
+    { tone: 'Neutral', text: 'I see your message. What\'s up?', confidence: 0.7 },
+    { tone: 'Neutral', text: 'Okay, I\'m here. Tell me more.', confidence: 0.7 }
   ];
 }
 

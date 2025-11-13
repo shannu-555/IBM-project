@@ -27,46 +27,94 @@ async function refreshAccessToken(refreshToken: string): Promise<string> {
 async function generateGeminiReplies(emailBody: string, subject: string, language: string = 'auto'): Promise<any[]> {
   const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
   
-  const prompt = `Generate 3 professional email replies for this email${language !== 'auto' ? ` in ${language}` : ''}.
-Tone 1: Formal
-Tone 2: Semi-formal
-Tone 3: Friendly
+  const prompt = `You are an expert conversational assistant. Your job is to generate natural, human-like email replies that match the tone, emotion, and intent of the sender's email. Avoid robotic phrases, avoid formal templates, avoid generic responses, avoid corporate language. Keep replies natural and context-aware. Always mirror the emotional tone of the sender.
 
-Subject: ${subject}
-Email Body: ${emailBody}
+Analyze this email VERY deeply. Understand the intent, tone, context, and emotional expression:
 
-Respond with a JSON array of 3 replies, each with: tone, text, confidence (0-1).`;
+Subject: "${subject}"
+Email Body: "${emailBody}"
+
+Then create 3 completely different natural email replies that sound human and genuine.
+
+STRICT RULES YOU MUST FOLLOW:
+❌ NEVER use: "Thank you for your message", "I will respond shortly", "Got your email", "I appreciate", "I'll get back to you"
+❌ NEVER be overly formal unless the email is clearly professional/corporate
+❌ NEVER repeat the same reply structure or pattern
+❌ NEVER use robotic or templated language
+❌ NEVER apologize unless contextually appropriate
+✅ DO sound like a real person writing naturally
+✅ DO match the sender's tone (casual→casual, professional→professional, friendly→friendly)
+✅ DO keep replies concise and to the point
+✅ DO use natural language and proper email etiquette
+✅ DO make each reply feel genuine and different
+
+${language !== 'auto' ? `Reply in ${language} language.` : 'Reply in the same language as the email.'}
+
+Return ONLY valid JSON in this format:
+[
+  {
+    "tone": "casual/friendly/professional/etc",
+    "text": "first natural email reply",
+    "confidence": 0.9
+  },
+  {
+    "tone": "same tone as detected",
+    "text": "second completely different reply",
+    "confidence": 0.85
+  },
+  {
+    "tone": "same tone as detected",
+    "text": "third unique reply with different angle",
+    "confidence": 0.8
+  }
+]
+
+Remember: Sound human, not robotic. Be natural and genuine, not templated.`;
 
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{
           parts: [{ text: prompt }]
-        }]
+        }],
+        generationConfig: {
+          temperature: 0.7,
+          topK: 40,
+          topP: 0.95,
+          maxOutputTokens: 1024,
+        }
       })
     }
   );
 
   const data = await response.json();
-  console.log('Gemini API response:', data);
+  console.log('Gemini API response:', JSON.stringify(data, null, 2));
   
   try {
-    const responseText = data.candidates[0].content.parts[0].text;
-    const jsonMatch = responseText.match(/\[[\s\S]*\]/);
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]);
+    if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
+      const responseText = data.candidates[0].content.parts[0].text;
+      console.log('Gemini response text:', responseText);
+      
+      const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        const replies = JSON.parse(jsonMatch[0]);
+        console.log('Parsed replies:', replies);
+        return replies;
+      }
     }
+    
+    console.warn('Could not extract valid JSON from Gemini response');
   } catch (e) {
     console.error('Error parsing Gemini response:', e);
   }
   
   return [
-    { tone: 'Formal', text: 'Thank you for your email. I will review this and respond accordingly.', confidence: 0.8 },
-    { tone: 'Semi-formal', text: 'Thanks for reaching out! I\'ll look into this and get back to you soon.', confidence: 0.8 },
-    { tone: 'Friendly', text: 'Hey! Thanks for the email. I\'ll check this out and reply soon!', confidence: 0.8 }
+    { tone: 'Neutral', text: 'Got it, let me look into this and get back to you.', confidence: 0.7 },
+    { tone: 'Neutral', text: 'Thanks for the heads up. I\'ll handle this.', confidence: 0.7 },
+    { tone: 'Neutral', text: 'I see what you mean. Let me check on this.', confidence: 0.7 }
   ];
 }
 
