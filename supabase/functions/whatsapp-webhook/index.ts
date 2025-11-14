@@ -74,21 +74,20 @@ Remember: Sound human, not robotic. Be natural, not formal. Be conversational, n
           topP: 0.95,
           maxOutputTokens: 2048,
           responseMimeType: "application/json",
-          responseSchema: {
-            type: "array",
-            minItems: 3,
-            maxItems: 3,
-            items: {
-              type: "object",
-              properties: {
-                tone: { type: "string" },
-                text: { type: "string" },
-                confidence: { type: "number" }
-              },
-              required: ["tone", "text", "confidence"],
-              additionalProperties: false
-            }
-          }
+           responseSchema: {
+             type: "array",
+             minItems: 3,
+             maxItems: 3,
+             items: {
+               type: "object",
+               properties: {
+                 tone: { type: "string" },
+                 text: { type: "string" },
+                 confidence: { type: "number" }
+               },
+               required: ["tone", "text", "confidence"],
+             }
+           }
         }
       })
     }
