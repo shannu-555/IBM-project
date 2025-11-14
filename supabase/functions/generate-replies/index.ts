@@ -80,7 +80,6 @@ Remember: Sound human, not robotic. Be natural, not formal. Be conversational, n
                 confidence: { type: "number" }
               },
               required: ["tone", "text", "confidence"],
-              additionalProperties: false
             }
           }
         }
