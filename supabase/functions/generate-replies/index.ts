@@ -59,6 +59,7 @@ Remember: Sound human, not robotic. Be natural, not formal. Be conversational, n
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{
+          role: "user",
           parts: [{ text: prompt }]
         }],
         generationConfig: {
