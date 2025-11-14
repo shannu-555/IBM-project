@@ -71,8 +71,8 @@ Return ONLY valid JSON in this format:
 
 Remember: Sound human, not robotic. Be natural and genuine, not templated.`;
 
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+   const response = await fetch(
+     `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -111,11 +111,7 @@ Remember: Sound human, not robotic. Be natural and genuine, not templated.`;
     console.error('Error parsing Gemini response:', e);
   }
   
-  return [
-    { tone: 'Neutral', text: 'Got it, let me look into this and get back to you.', confidence: 0.7 },
-    { tone: 'Neutral', text: 'Thanks for the heads up. I\'ll handle this.', confidence: 0.7 },
-    { tone: 'Neutral', text: 'I see what you mean. Let me check on this.', confidence: 0.7 }
-  ];
+  throw new Error('Gemini generation failed: Could not extract valid JSON from response');
 }
 
 async function fetchUnreadEmails(accessToken: string) {

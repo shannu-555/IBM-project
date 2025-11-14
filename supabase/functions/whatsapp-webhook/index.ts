@@ -59,7 +59,7 @@ Return ONLY valid JSON in this format:
 Remember: Sound human, not robotic. Be natural, not formal. Be conversational, not corporate.`;
 
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -98,11 +98,7 @@ Remember: Sound human, not robotic. Be natural, not formal. Be conversational, n
     console.error('Error parsing Gemini response:', e);
   }
   
-  return [
-    { tone: 'Neutral', text: 'Yeah, I got it. What do you need?', confidence: 0.7 },
-    { tone: 'Neutral', text: 'I see your message. What\'s up?', confidence: 0.7 },
-    { tone: 'Neutral', text: 'Okay, I\'m here. Tell me more.', confidence: 0.7 }
-  ];
+  throw new Error('Gemini generation failed: Could not extract valid JSON from response');
 }
 
 async function sendTwilioMessage(to: string, body: string) {
