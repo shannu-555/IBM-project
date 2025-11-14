@@ -65,7 +65,7 @@ Remember: Sound human, not robotic. Be natural, not formal. Be conversational, n
           temperature: 0.7,
           topK: 40,
           topP: 0.95,
-          maxOutputTokens: 1024,
+          maxOutputTokens: 2048,
         }
       })
     }
@@ -75,6 +75,12 @@ Remember: Sound human, not robotic. Be natural, not formal. Be conversational, n
   console.log('Gemini API response:', JSON.stringify(data, null, 2));
   
   try {
+    // Check for incomplete response due to token limits
+    if (data.candidates?.[0]?.finishReason === 'MAX_TOKENS') {
+      console.error('Gemini response was truncated due to MAX_TOKENS');
+      throw new Error('Response too long - try a shorter message');
+    }
+    
     if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
       const responseText = data.candidates[0].content.parts[0].text;
       console.log('Gemini response text:', responseText);
@@ -89,6 +95,7 @@ Remember: Sound human, not robotic. Be natural, not formal. Be conversational, n
     }
     
     console.warn('Could not extract valid JSON from Gemini response');
+    console.warn('Response structure:', JSON.stringify(data.candidates?.[0], null, 2));
   } catch (e) {
     console.error('Error parsing Gemini response:', e);
   }
