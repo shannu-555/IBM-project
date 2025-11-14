@@ -72,6 +72,22 @@ Remember: Sound human, not robotic. Be natural, not formal. Be conversational, n
           topK: 40,
           topP: 0.95,
           maxOutputTokens: 2048,
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: "array",
+            minItems: 3,
+            maxItems: 3,
+            items: {
+              type: "object",
+              properties: {
+                tone: { type: "string" },
+                text: { type: "string" },
+                confidence: { type: "number" }
+              },
+              required: ["tone", "text", "confidence"],
+              additionalProperties: false
+            }
+          }
         }
       })
     }
@@ -86,15 +102,24 @@ Remember: Sound human, not robotic. Be natural, not formal. Be conversational, n
       throw new Error('Response too long - try a shorter message');
     }
     
-    if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
-      const responseText = data.candidates[0].content.parts[0].text;
-      console.log('Gemini response text:', responseText);
-      
-      const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+    const parts = data.candidates?.[0]?.content?.parts;
+    if (Array.isArray(parts) && parts.length > 0) {
+      let raw = parts.map((p: any) => (p.text ?? '')).join('').trim();
+      raw = raw.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
+
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length) {
+          console.log('Parsed replies (direct):', parsed);
+          return parsed;
+        }
+      } catch {}
+
+      const jsonMatch = raw.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
-        const replies = JSON.parse(jsonMatch[0]);
-        console.log('Parsed replies:', replies);
-        return replies;
+        const parsed = JSON.parse(jsonMatch[0]);
+        console.log('Parsed replies (substring):', parsed);
+        return parsed;
       }
     }
     
