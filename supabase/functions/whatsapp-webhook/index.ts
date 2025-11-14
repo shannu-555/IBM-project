@@ -102,10 +102,22 @@ Remember: Sound human, not robotic. Be natural, not formal. Be conversational, n
       console.error('Gemini response was truncated due to MAX_TOKENS');
       throw new Error('Response too long - try a shorter message');
     }
+    if ((data as any).promptFeedback?.blockReason) {
+      console.error('Prompt blocked by safety:', (data as any).promptFeedback.blockReason);
+      throw new Error(`Model blocked by safety: ${(data as any).promptFeedback.blockReason}`);
+    }
     
     const parts = data.candidates?.[0]?.content?.parts;
     if (Array.isArray(parts) && parts.length > 0) {
-      let raw = parts.map((p: any) => (p.text ?? '')).join('').trim();
+      const chunks: string[] = [];
+      for (const p of parts) {
+        if (typeof (p as any).text === 'string') chunks.push((p as any).text);
+        const inline = (p as any).inlineData;
+        if (inline?.data && (inline?.mimeType?.includes('json') || inline?.mimeType === 'application/json')) {
+          try { chunks.push(atob(inline.data)); } catch {}
+        }
+      }
+      let raw = chunks.join('').trim();
       raw = raw.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
 
       try {
