@@ -97,14 +97,25 @@ Remember: Sound human, not robotic. Be natural, not formal. Be conversational, n
       console.error('Gemini response was truncated due to MAX_TOKENS');
       throw new Error('Response too long - try a shorter message');
     }
+    // Safety blocks
+    if (data.promptFeedback?.blockReason) {
+      console.error('Prompt blocked by safety:', data.promptFeedback.blockReason);
+      throw new Error(`Model blocked by safety: ${data.promptFeedback.blockReason}`);
+    }
     
     const parts = data.candidates?.[0]?.content?.parts;
     if (Array.isArray(parts) && parts.length > 0) {
-      let raw = parts.map((p: any) => (p.text ?? '')).join('').trim();
-      // Strip code fences if present
+      const chunks: string[] = [];
+      for (const p of parts) {
+        if (typeof p.text === 'string') chunks.push(p.text);
+        const inline = (p as any).inlineData;
+        if (inline?.data && (inline?.mimeType?.includes('json') || inline?.mimeType === 'application/json')) {
+          try { chunks.push(atob(inline.data)); } catch {}
+        }
+      }
+      let raw = chunks.join('').trim();
       raw = raw.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
 
-      // Try direct JSON parse first
       try {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed) && parsed.length) {
@@ -113,7 +124,6 @@ Remember: Sound human, not robotic. Be natural, not formal. Be conversational, n
         }
       } catch {}
 
-      // Fallback: extract JSON array substring
       const jsonMatch = raw.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]);
