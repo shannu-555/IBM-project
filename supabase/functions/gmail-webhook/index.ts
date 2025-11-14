@@ -84,7 +84,7 @@ Remember: Sound human, not robotic. Be natural and genuine, not templated.`;
           temperature: 0.7,
           topK: 40,
           topP: 0.95,
-          maxOutputTokens: 1024,
+          maxOutputTokens: 2048,
         }
       })
     }
@@ -94,6 +94,11 @@ Remember: Sound human, not robotic. Be natural and genuine, not templated.`;
   console.log('Gemini API response:', JSON.stringify(data, null, 2));
   
   try {
+    if (data.candidates?.[0]?.finishReason === 'MAX_TOKENS') {
+      console.error('Gemini response was truncated due to MAX_TOKENS');
+      throw new Error('Email too long - response truncated');
+    }
+    
     if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
       const responseText = data.candidates[0].content.parts[0].text;
       console.log('Gemini response text:', responseText);
