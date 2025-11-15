@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -176,6 +177,25 @@ serve(async (req) => {
   try {
     console.log('Received WhatsApp webhook request');
     
+    // Get authorization header to identify user
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      throw new Error('Missing authorization header');
+    }
+
+    // Initialize Supabase client
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // Verify user from JWT
+    const jwt = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: userError } = await supabase.auth.getUser(jwt);
+    
+    if (userError || !user) {
+      throw new Error('Invalid authorization token');
+    }
+    
     const formData = await req.formData();
     const message: TwilioMessage = {
       From: formData.get('From') as string,
@@ -186,23 +206,55 @@ serve(async (req) => {
 
     console.log('Incoming message:', message);
 
+    // Store message in database
+    const { data: storedMessage, error: messageError } = await supabase
+      .from('messages')
+      .insert({
+        user_id: user.id,
+        platform: 'whatsapp',
+        sender: message.ProfileName || message.From,
+        content: message.Body,
+        message_id: message.MessageSid,
+      })
+      .select()
+      .single();
+
+    if (messageError) {
+      console.error('Error storing message:', messageError);
+      throw messageError;
+    }
+
+    console.log('Message stored:', storedMessage);
+
     // Generate AI replies using Gemini
     const replies = await generateGeminiReplies(message.Body);
     console.log('Generated replies:', replies);
 
-    // For now, we'll store the message and replies in the response
-    // In a full implementation, you'd store these in the database
-    // and use real-time subscriptions to update the UI
+    // Store replies in database
+    const repliesData = replies.map(reply => ({
+      message_id: storedMessage.id,
+      tone: reply.tone,
+      content: reply.text,
+      confidence: reply.confidence,
+      is_sent: false,
+    }));
 
-    // Optionally auto-send the first reply (you can make this configurable)
-    // await sendTwilioMessage(message.From, replies[0].text);
+    const { error: repliesError } = await supabase
+      .from('replies')
+      .insert(repliesData);
+
+    if (repliesError) {
+      console.error('Error storing replies:', repliesError);
+      throw repliesError;
+    }
+
+    console.log('Replies stored successfully');
 
     return new Response(
       JSON.stringify({ 
         success: true, 
         message: 'Message received and processed',
-        incomingMessage: message,
-        generatedReplies: replies
+        messageId: storedMessage.id
       }), 
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

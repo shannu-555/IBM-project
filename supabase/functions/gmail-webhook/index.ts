@@ -1,4 +1,6 @@
+import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -98,8 +100,7 @@ Remember: Sound human, not robotic. Be natural and genuine, not templated.`;
                 text: { type: "string" },
                 confidence: { type: "number" }
               },
-              required: ["tone", "text", "confidence"],
-              additionalProperties: false
+              required: ["tone", "text", "confidence"]
             }
           }
         }
@@ -189,6 +190,7 @@ async function fetchUnreadEmails(accessToken: string) {
 
     return {
       id: email.id,
+      threadId: email.threadId,
       subject,
       from,
       body,
@@ -205,6 +207,25 @@ serve(async (req) => {
   try {
     console.log('Fetching Gmail messages...');
     
+    // Get authorization header to identify user
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      throw new Error('Missing authorization header');
+    }
+
+    // Initialize Supabase client
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // Verify user from JWT
+    const jwt = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: userError } = await supabase.auth.getUser(jwt);
+    
+    if (userError || !user) {
+      throw new Error('Invalid authorization token');
+    }
+    
     const GMAIL_REFRESH_TOKEN = Deno.env.get('GMAIL_REFRESH_TOKEN');
     if (!GMAIL_REFRESH_TOKEN) {
       throw new Error('Gmail refresh token not configured');
@@ -217,18 +238,60 @@ serve(async (req) => {
     const emails = await fetchUnreadEmails(accessToken);
     console.log(`Found ${emails.length} unread emails`);
 
-    // Generate replies for each email
-    const emailsWithReplies = await Promise.all(
+    // Process each email
+    const processedEmails = await Promise.all(
       emails.map(async (email) => {
+        // Store message in database
+        const { data: storedMessage, error: messageError } = await supabase
+          .from('messages')
+          .insert({
+            user_id: user.id,
+            platform: 'email',
+            sender: email.from,
+            content: email.body,
+            message_id: email.id,
+            thread_id: email.threadId,
+          })
+          .select()
+          .single();
+
+        if (messageError) {
+          console.error('Error storing email:', messageError);
+          throw messageError;
+        }
+
+        // Generate AI replies using Gemini
         const replies = await generateGeminiReplies(email.body, email.subject);
-        return { ...email, replies };
+        
+        // Store replies in database
+        const repliesData = replies.map(reply => ({
+          message_id: storedMessage.id,
+          tone: reply.tone,
+          content: reply.text,
+          confidence: reply.confidence,
+          is_sent: false,
+        }));
+
+        const { error: repliesError } = await supabase
+          .from('replies')
+          .insert(repliesData);
+
+        if (repliesError) {
+          console.error('Error storing replies:', repliesError);
+          throw repliesError;
+        }
+
+        return {
+          messageId: storedMessage.id,
+          emailId: email.id
+        };
       })
     );
 
     return new Response(
       JSON.stringify({ 
         success: true,
-        emails: emailsWithReplies
+        processed: processedEmails.length
       }), 
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

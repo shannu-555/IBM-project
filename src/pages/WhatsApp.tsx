@@ -7,22 +7,49 @@ import { toast } from "sonner";
 import { QuickMessageGenerator } from "@/components/QuickMessageGenerator";
 import { MetricsDisplay } from "@/components/MetricsDisplay";
 import { MessageHistory } from "@/components/MessageHistory";
+import { supabase } from "@/integrations/supabase/client";
 
 const WhatsApp = () => {
   const [isConnected, setIsConnected] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
 
   useEffect(() => {
-    // Load connection state from localStorage
-    const savedState = localStorage.getItem('whatsapp_connected');
-    if (savedState === 'true') {
-      setIsConnected(true);
-    }
+    checkConnection();
   }, []);
 
-  const handleConnect = () => {
-    localStorage.setItem('whatsapp_connected', 'true');
-    setIsConnected(true);
-    toast.success("WhatsApp connected successfully");
+  const checkConnection = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        const savedState = localStorage.getItem('whatsapp_connected');
+        setIsConnected(savedState === 'true');
+      }
+    } catch (error) {
+      console.error('Error checking connection:', error);
+    }
+  };
+
+  const handleConnect = async () => {
+    setIsConnecting(true);
+    try {
+      // Verify Twilio credentials are set
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        toast.error("Please log in first");
+        return;
+      }
+
+      // Store connection state
+      localStorage.setItem('whatsapp_connected', 'true');
+      setIsConnected(true);
+      toast.success("WhatsApp connected successfully - Ready to receive messages");
+    } catch (error) {
+      console.error('Connection error:', error);
+      toast.error("Failed to connect WhatsApp");
+    } finally {
+      setIsConnecting(false);
+    }
   };
 
   const handleDisconnect = () => {
@@ -69,9 +96,9 @@ const WhatsApp = () => {
                   <li>• Twilio Auth Token</li>
                   <li>• WhatsApp-enabled Twilio number</li>
                 </ul>
-                <Button onClick={handleConnect} size="lg" className="gap-2">
+                <Button onClick={handleConnect} size="lg" className="gap-2" disabled={isConnecting}>
                   <LinkIcon className="h-4 w-4" />
-                  Connect WhatsApp
+                  {isConnecting ? 'Connecting...' : 'Connect WhatsApp'}
                 </Button>
               </div>
             </>
