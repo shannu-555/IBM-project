@@ -174,7 +174,7 @@ serve(async (req) => {
   }
 
   try {
-    const { message, platform, language = 'auto' } = await req.json();
+    const { message, platform, messageId, language = 'auto' } = await req.json();
     
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
@@ -211,26 +211,49 @@ serve(async (req) => {
     const replies = await generateGeminiReplies(message, language);
     console.log('Generated replies:', replies);
 
-    // Save message to database
-    const { data: savedMessage, error: messageError } = await supabaseClient
-      .from('messages')
-      .insert({
-        user_id: userId,
-        platform,
-        sender: 'manual',
-        content: message
-      })
-      .select()
-      .single();
+    let finalMessageId = messageId;
+    let savedMessage = null;
 
-    if (messageError) {
-      console.error('Error saving message:', messageError);
-      throw messageError;
+    // If messageId is provided, use existing message; otherwise create new one
+    if (!messageId) {
+      // Save message to database (for Quick Message Generator)
+      const { data: newMessage, error: messageError } = await supabaseClient
+        .from('messages')
+        .insert({
+          user_id: userId,
+          platform: platform || 'whatsapp',
+          sender: 'manual',
+          content: message
+        })
+        .select()
+        .single();
+
+      if (messageError) {
+        console.error('Error saving message:', messageError);
+        throw messageError;
+      }
+
+      savedMessage = newMessage;
+      finalMessageId = newMessage.id;
+    } else {
+      // Use existing message
+      const { data: existingMessage, error: fetchError } = await supabaseClient
+        .from('messages')
+        .select('*')
+        .eq('id', messageId)
+        .single();
+
+      if (fetchError) {
+        console.error('Error fetching message:', fetchError);
+        throw fetchError;
+      }
+
+      savedMessage = existingMessage;
     }
 
     // Save replies to database
     const repliesData = replies.map(reply => ({
-      message_id: savedMessage.id,
+      message_id: finalMessageId,
       tone: reply.tone,
       content: reply.text,
       confidence: reply.confidence
@@ -251,7 +274,7 @@ serve(async (req) => {
       .from('metrics')
       .insert({
         user_id: userId,
-        platform,
+        platform: platform || savedMessage?.platform || 'whatsapp',
         ...metrics
       });
 

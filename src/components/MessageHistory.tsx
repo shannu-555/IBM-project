@@ -113,7 +113,11 @@ export const MessageHistory = ({ platform }: MessageHistoryProps) => {
     setGeneratingForMessage(messageId);
     try {
       const { data, error } = await supabase.functions.invoke('generate-replies', {
-        body: { message: messageContent }
+        body: { 
+          message: messageContent,
+          messageId: messageId,
+          platform: platform
+        }
       });
 
       if (error) throw error;
