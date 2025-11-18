@@ -1,17 +1,29 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Save } from "lucide-react";
+import { Save, User } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 const Settings = () => {
   const [language, setLanguage] = useState("auto");
   const [whatsappNotifications, setWhatsappNotifications] = useState(true);
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [showActiveStatus, setShowActiveStatus] = useState(true);
+  const [userId, setUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchUserId = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setUserId(user.id);
+      }
+    };
+    fetchUserId();
+  }, []);
 
   const handleSave = () => {
     toast.success("Settings saved successfully!");
@@ -25,6 +37,40 @@ const Settings = () => {
           Manage your preferences and application settings
         </p>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <User className="h-5 w-5" />
+            Account Information
+          </CardTitle>
+          <CardDescription>
+            Your unique user identifier
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            <Label htmlFor="user-id">User ID</Label>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 px-3 py-2 text-xs bg-muted rounded border font-mono">
+                {userId || "Loading..."}
+              </code>
+              {userId && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    navigator.clipboard.writeText(userId);
+                    toast.success("User ID copied to clipboard!");
+                  }}
+                >
+                  Copy
+                </Button>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
