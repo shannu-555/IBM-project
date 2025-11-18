@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Trash2, Copy, Check } from "lucide-react";
+import { Trash2, Copy, Check, Sparkles, Send } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -29,6 +29,8 @@ export const MessageHistory = ({ platform }: MessageHistoryProps) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [generatingForMessage, setGeneratingForMessage] = useState<string | null>(null);
+  const [sendingReply, setSendingReply] = useState<string | null>(null);
 
   useEffect(() => {
     fetchMessages();
@@ -107,6 +109,58 @@ export const MessageHistory = ({ platform }: MessageHistoryProps) => {
     }
   };
 
+  const handleGenerate = async (messageId: string, messageContent: string) => {
+    setGeneratingForMessage(messageId);
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-replies', {
+        body: { message: messageContent }
+      });
+
+      if (error) throw error;
+
+      toast.success("AI replies generated!");
+      fetchMessages(); // Refresh to show new replies
+    } catch (error) {
+      console.error('Error generating replies:', error);
+      toast.error("Failed to generate replies");
+    } finally {
+      setGeneratingForMessage(null);
+    }
+  };
+
+  const handleSendReply = async (replyContent: string, replyId: string, messageSender: string) => {
+    if (platform !== 'whatsapp') {
+      toast.error("Send feature only available for WhatsApp");
+      return;
+    }
+
+    setSendingReply(replyId);
+    try {
+      const { data, error } = await supabase.functions.invoke('send-whatsapp-reply', {
+        body: { 
+          to: messageSender,
+          body: replyContent 
+        }
+      });
+
+      if (error) throw error;
+
+      // Update reply as sent in database
+      await supabase
+        .from('replies')
+        .update({ is_sent: true })
+        .eq('id', replyId);
+
+      toast.success("Reply sent via WhatsApp!");
+      fetchMessages(); // Refresh to show updated status
+    } catch (error) {
+      console.error('Error sending reply:', error);
+      toast.error("Failed to send reply");
+    } finally {
+      setSendingReply(null);
+    }
+  };
+
   if (loading) {
     return (
       <Card>
@@ -159,14 +213,25 @@ export const MessageHistory = ({ platform }: MessageHistoryProps) => {
                 </div>
                 <p className="text-sm font-medium">{message.content}</p>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => handleDelete(message.id)}
-                className="text-destructive hover:text-destructive"
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleGenerate(message.id, message.content)}
+                  disabled={generatingForMessage === message.id}
+                >
+                  <Sparkles className="h-4 w-4 mr-1" />
+                  {generatingForMessage === message.id ? 'Generating...' : 'Generate'}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleDelete(message.id)}
+                  className="text-destructive hover:text-destructive"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
 
             {message.replies.length > 0 && (
@@ -178,17 +243,30 @@ export const MessageHistory = ({ platform }: MessageHistoryProps) => {
                       <Badge variant="secondary" className="text-xs">{reply.tone}</Badge>
                       <p className="text-sm">{reply.content}</p>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleCopy(reply.content, reply.id)}
-                    >
-                      {copiedId === reply.id ? (
-                        <Check className="h-3 w-3" />
-                      ) : (
-                        <Copy className="h-3 w-3" />
+                    <div className="flex gap-2">
+                      {platform === 'whatsapp' && (
+                        <Button
+                          variant="default"
+                          size="sm"
+                          onClick={() => handleSendReply(reply.content, reply.id, message.sender)}
+                          disabled={sendingReply === reply.id}
+                        >
+                          <Send className="h-3 w-3 mr-1" />
+                          {sendingReply === reply.id ? 'Sending...' : 'Send Reply'}
+                        </Button>
                       )}
-                    </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleCopy(reply.content, reply.id)}
+                      >
+                        {copiedId === reply.id ? (
+                          <Check className="h-3 w-3" />
+                        ) : (
+                          <Copy className="h-3 w-3" />
+                        )}
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>
