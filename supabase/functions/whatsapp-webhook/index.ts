@@ -175,26 +175,24 @@ serve(async (req) => {
   }
 
   try {
-    console.log('Received WhatsApp webhook request');
+    console.log('Received WhatsApp webhook request from Twilio');
     
-    // Get authorization header to identify user
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      throw new Error('Missing authorization header');
-    }
-
     // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Verify user from JWT
-    const jwt = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: userError } = await supabase.auth.getUser(jwt);
+    // Get the first registered user (for single-user testing)
+    // In production, you'd map phone numbers to users
+    const { data: users, error: usersError } = await supabase.auth.admin.listUsers();
     
-    if (userError || !user) {
-      throw new Error('Invalid authorization token');
+    if (usersError || !users || users.users.length === 0) {
+      console.error('No users found in system');
+      throw new Error('No registered users found. Please sign up first.');
     }
+    
+    const user = users.users[0];
+    console.log('Using user:', user.id);
     
     const formData = await req.formData();
     const message: TwilioMessage = {
