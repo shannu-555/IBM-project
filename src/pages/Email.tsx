@@ -2,17 +2,30 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Mail, Link as LinkIcon, Unlink, RefreshCw } from "lucide-react";
+import { Mail, Link as LinkIcon, Unlink, RefreshCw, CheckCircle2, XCircle, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { QuickMessageGenerator } from "@/components/QuickMessageGenerator";
 import { MetricsDisplay } from "@/components/MetricsDisplay";
 import { MessageHistory } from "@/components/MessageHistory";
 import { supabase } from "@/integrations/supabase/client";
 
+interface IntegrationStatus {
+  credentials: 'valid' | 'invalid' | 'checking';
+  authentication: 'success' | 'failed' | 'checking';
+  fetching: 'working' | 'failed' | 'idle';
+  replyGeneration: 'active' | 'inactive' | 'checking';
+}
+
 const Email = () => {
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isFetching, setIsFetching] = useState(false);
+  const [status, setStatus] = useState<IntegrationStatus>({
+    credentials: 'checking',
+    authentication: 'checking',
+    fetching: 'idle',
+    replyGeneration: 'inactive'
+  });
 
   useEffect(() => {
     checkConnection();
@@ -32,49 +45,85 @@ const Email = () => {
 
   const handleConnect = async () => {
     setIsConnecting(true);
+    setStatus(prev => ({ ...prev, credentials: 'checking', authentication: 'checking' }));
+    
     try {
       const { data: { session } } = await supabase.auth.getSession();
       
       if (!session) {
         toast.error("Please log in first");
+        setStatus(prev => ({ ...prev, credentials: 'invalid', authentication: 'failed' }));
         return;
+      }
+
+      // Test Gmail connection by fetching emails
+      setStatus(prev => ({ ...prev, credentials: 'valid', authentication: 'success', fetching: 'working' }));
+      
+      const { data, error } = await supabase.functions.invoke('gmail-webhook');
+      
+      if (error) {
+        throw error;
       }
 
       // Store connection state
       localStorage.setItem('gmail_connected', 'true');
       setIsConnected(true);
-      toast.success("Gmail connected successfully");
+      setStatus(prev => ({ ...prev, replyGeneration: 'active', fetching: 'working' }));
+      toast.success(`Gmail connected successfully! Fetched ${data.processed || 0} emails.`);
       
-      // Fetch initial emails
-      await fetchEmails();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Connection error:', error);
-      toast.error("Failed to connect Gmail");
+      setStatus(prev => ({ 
+        ...prev, 
+        credentials: 'invalid', 
+        authentication: 'failed',
+        fetching: 'failed'
+      }));
+      toast.error(`Failed to connect Gmail: ${error.message || 'Unknown error'}`);
     } finally {
       setIsConnecting(false);
+      setStatus(prev => ({ ...prev, fetching: 'idle' }));
     }
   };
 
   const fetchEmails = async () => {
     setIsFetching(true);
+    setStatus(prev => ({ ...prev, fetching: 'working' }));
+    
     try {
-      const { error } = await supabase.functions.invoke('gmail-webhook');
+      const { data, error } = await supabase.functions.invoke('gmail-webhook');
       
       if (error) throw error;
       
-      toast.success("Emails fetched successfully");
-    } catch (error) {
+      setStatus(prev => ({ ...prev, replyGeneration: 'active' }));
+      toast.success(`Fetched ${data.processed || 0} new emails successfully`);
+    } catch (error: any) {
       console.error('Error fetching emails:', error);
-      toast.error("Failed to fetch emails");
+      setStatus(prev => ({ ...prev, fetching: 'failed' }));
+      toast.error(`Failed to fetch emails: ${error.message || 'Unknown error'}`);
     } finally {
       setIsFetching(false);
+      setStatus(prev => ({ ...prev, fetching: 'idle' }));
     }
   };
 
   const handleDisconnect = () => {
     localStorage.setItem('gmail_connected', 'false');
     setIsConnected(false);
+    setStatus({
+      credentials: 'checking',
+      authentication: 'checking',
+      fetching: 'idle',
+      replyGeneration: 'inactive'
+    });
     toast.info("Gmail disconnected");
+  };
+
+  const StatusIcon = ({ status }: { status: 'valid' | 'success' | 'working' | 'active' | 'invalid' | 'failed' | 'checking' | 'inactive' | 'idle' }) => {
+    if (status === 'checking') return <Clock className="h-4 w-4 text-muted-foreground animate-pulse" />;
+    if (['valid', 'success', 'working', 'active'].includes(status)) return <CheckCircle2 className="h-4 w-4 text-green-500" />;
+    if (['invalid', 'failed'].includes(status)) return <XCircle className="h-4 w-4 text-destructive" />;
+    return <Clock className="h-4 w-4 text-muted-foreground" />;
   };
 
   return (
@@ -144,6 +193,38 @@ const Email = () => {
                       <Unlink className="h-4 w-4" />
                       Disconnect
                     </Button>
+                  </div>
+                </div>
+
+                {/* Gmail Integration Status Panel */}
+                <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-background/50 rounded-lg border">
+                  <div className="flex items-center gap-2">
+                    <StatusIcon status={status.credentials} />
+                    <div className="text-xs">
+                      <p className="font-medium">Credentials</p>
+                      <p className="text-muted-foreground capitalize">{status.credentials}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <StatusIcon status={status.authentication} />
+                    <div className="text-xs">
+                      <p className="font-medium">Authentication</p>
+                      <p className="text-muted-foreground capitalize">{status.authentication}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <StatusIcon status={status.fetching} />
+                    <div className="text-xs">
+                      <p className="font-medium">Fetching Emails</p>
+                      <p className="text-muted-foreground capitalize">{status.fetching}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <StatusIcon status={status.replyGeneration} />
+                    <div className="text-xs">
+                      <p className="font-medium">Reply Generation</p>
+                      <p className="text-muted-foreground capitalize">{status.replyGeneration}</p>
+                    </div>
                   </div>
                 </div>
               </div>
