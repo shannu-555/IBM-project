@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Trash2, Copy, Check, Sparkles, Send } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Trash2, Copy, Check, Sparkles, Send, Filter } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -33,6 +34,11 @@ export const MessageHistory = ({ platform }: MessageHistoryProps) => {
   const [loading, setLoading] = useState(true);
   const [generatingForMessage, setGeneratingForMessage] = useState<string | null>(null);
   const [sendingReply, setSendingReply] = useState<string | null>(null);
+  const [filterSender, setFilterSender] = useState("");
+  const [filterSubject, setFilterSubject] = useState("");
+  const [filterDateFrom, setFilterDateFrom] = useState("");
+  const [filterDateTo, setFilterDateTo] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
     fetchMessages();
@@ -56,7 +62,7 @@ export const MessageHistory = ({ platform }: MessageHistoryProps) => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [platform]);
+  }, [platform, filterSender, filterSubject, filterDateFrom, filterDateTo]);
 
   const fetchMessages = async () => {
     try {
@@ -75,7 +81,37 @@ export const MessageHistory = ({ platform }: MessageHistoryProps) => {
 
       if (error) throw error;
 
-      setMessages(messagesData || []);
+      let filteredData = messagesData || [];
+
+      // Apply filters
+      if (filterSender) {
+        filteredData = filteredData.filter(msg => 
+          msg.sender.toLowerCase().includes(filterSender.toLowerCase())
+        );
+      }
+
+      if (platform === 'email' && filterSubject) {
+        filteredData = filteredData.filter(msg => 
+          msg.content.toLowerCase().includes(filterSubject.toLowerCase())
+        );
+      }
+
+      if (filterDateFrom) {
+        const fromDate = new Date(filterDateFrom);
+        filteredData = filteredData.filter(msg => 
+          new Date(msg.created_at) >= fromDate
+        );
+      }
+
+      if (filterDateTo) {
+        const toDate = new Date(filterDateTo);
+        toDate.setHours(23, 59, 59, 999);
+        filteredData = filteredData.filter(msg => 
+          new Date(msg.created_at) <= toDate
+        );
+      }
+
+      setMessages(filteredData);
     } catch (error) {
       console.error('Error fetching messages:', error);
     } finally {
@@ -211,10 +247,66 @@ export const MessageHistory = ({ platform }: MessageHistoryProps) => {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Message History</CardTitle>
-        <CardDescription>
-          Recent messages with AI-generated replies
-        </CardDescription>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle>Message History</CardTitle>
+            <CardDescription>
+              Recent messages with AI-generated replies
+            </CardDescription>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowFilters(!showFilters)}
+            className="gap-2"
+          >
+            <Filter className="h-4 w-4" />
+            {showFilters ? 'Hide' : 'Show'} Filters
+          </Button>
+        </div>
+
+        {showFilters && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mt-4 p-4 border rounded-lg bg-muted/50">
+            <div>
+              <label className="text-xs font-medium mb-1 block">Sender</label>
+              <Input
+                placeholder="Filter by sender..."
+                value={filterSender}
+                onChange={(e) => setFilterSender(e.target.value)}
+                className="h-9"
+              />
+            </div>
+            {platform === 'email' && (
+              <div>
+                <label className="text-xs font-medium mb-1 block">Subject/Content</label>
+                <Input
+                  placeholder="Filter by subject..."
+                  value={filterSubject}
+                  onChange={(e) => setFilterSubject(e.target.value)}
+                  className="h-9"
+                />
+              </div>
+            )}
+            <div>
+              <label className="text-xs font-medium mb-1 block">From Date</label>
+              <Input
+                type="date"
+                value={filterDateFrom}
+                onChange={(e) => setFilterDateFrom(e.target.value)}
+                className="h-9"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium mb-1 block">To Date</label>
+              <Input
+                type="date"
+                value={filterDateTo}
+                onChange={(e) => setFilterDateTo(e.target.value)}
+                className="h-9"
+              />
+            </div>
+          </div>
+        )}
       </CardHeader>
       <CardContent className="space-y-4">
         {messages.map((message) => (

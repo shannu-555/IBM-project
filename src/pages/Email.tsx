@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { QuickMessageGenerator } from "@/components/QuickMessageGenerator";
 import { MetricsDisplay } from "@/components/MetricsDisplay";
 import { MessageHistory } from "@/components/MessageHistory";
+import { EmailTemplates } from "@/components/EmailTemplates";
 import { supabase } from "@/integrations/supabase/client";
 
 interface IntegrationStatus {
@@ -43,8 +44,8 @@ const Email = () => {
       }
     };
 
-    // Poll every 15 seconds
-    const intervalId = setInterval(pollEmails, 15000);
+    // Poll every 5 minutes
+    const intervalId = setInterval(pollEmails, 300000);
 
     return () => clearInterval(intervalId);
   }, [isConnected]);
@@ -251,6 +252,8 @@ const Email = () => {
                 <QuickMessageGenerator platform="email" />
                 <MetricsDisplay platform="email" />
               </div>
+
+              <EmailTemplates />
 
               <MessageHistory platform="email" />
             </>
