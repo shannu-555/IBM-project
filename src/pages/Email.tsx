@@ -31,6 +31,24 @@ const Email = () => {
     checkConnection();
   }, []);
 
+  // Real-time polling for new emails when connected
+  useEffect(() => {
+    if (!isConnected) return;
+
+    const pollEmails = async () => {
+      try {
+        await supabase.functions.invoke('gmail-webhook');
+      } catch (error) {
+        console.error('Polling error:', error);
+      }
+    };
+
+    // Poll every 15 seconds
+    const intervalId = setInterval(pollEmails, 15000);
+
+    return () => clearInterval(intervalId);
+  }, [isConnected]);
+
   const checkConnection = async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();

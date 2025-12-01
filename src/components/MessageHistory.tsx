@@ -11,6 +11,7 @@ interface Reply {
   tone: string;
   content: string;
   confidence: number;
+  is_sent?: boolean;
 }
 
 interface Message {
@@ -18,6 +19,7 @@ interface Message {
   sender: string;
   content: string;
   created_at: string;
+  thread_id?: string;
   replies: Reply[];
 }
 
@@ -132,22 +134,32 @@ export const MessageHistory = ({ platform }: MessageHistoryProps) => {
     }
   };
 
-  const handleSendReply = async (replyContent: string, replyId: string, messageSender: string) => {
-    if (platform !== 'whatsapp') {
-      toast.error("Send feature only available for WhatsApp");
-      return;
-    }
-
+  const handleSendReply = async (replyContent: string, replyId: string, messageSender: string, threadId?: string) => {
     setSendingReply(replyId);
     try {
-      const { data, error } = await supabase.functions.invoke('send-whatsapp-reply', {
-        body: { 
-          to: messageSender,
-          body: replyContent 
-        }
-      });
+      if (platform === 'whatsapp') {
+        const { error } = await supabase.functions.invoke('send-whatsapp-reply', {
+          body: { 
+            to: messageSender,
+            body: replyContent 
+          }
+        });
 
-      if (error) throw error;
+        if (error) throw error;
+      } else if (platform === 'email') {
+        if (!threadId) {
+          throw new Error('Thread ID is required for email replies');
+        }
+
+        const { error } = await supabase.functions.invoke('send-gmail-reply', {
+          body: { 
+            threadId: threadId,
+            replyText: replyContent
+          }
+        });
+
+        if (error) throw error;
+      }
 
       // Update reply as sent in database
       await supabase
@@ -155,8 +167,8 @@ export const MessageHistory = ({ platform }: MessageHistoryProps) => {
         .update({ is_sent: true })
         .eq('id', replyId);
 
-      toast.success("Reply sent via WhatsApp!");
-      fetchMessages(); // Refresh to show updated status
+      toast.success(`Reply sent via ${platform === 'whatsapp' ? 'WhatsApp' : 'Email'}!`);
+      fetchMessages();
     } catch (error) {
       console.error('Error sending reply:', error);
       toast.error("Failed to send reply");
@@ -248,17 +260,15 @@ export const MessageHistory = ({ platform }: MessageHistoryProps) => {
                       <p className="text-sm">{reply.content}</p>
                     </div>
                     <div className="flex gap-2">
-                      {platform === 'whatsapp' && (
-                        <Button
-                          variant="default"
-                          size="sm"
-                          onClick={() => handleSendReply(reply.content, reply.id, message.sender)}
-                          disabled={sendingReply === reply.id}
-                        >
-                          <Send className="h-3 w-3 mr-1" />
-                          {sendingReply === reply.id ? 'Sending...' : 'Send Reply'}
-                        </Button>
-                      )}
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={() => handleSendReply(reply.content, reply.id, message.sender, message.thread_id)}
+                        disabled={sendingReply === reply.id || reply.is_sent}
+                      >
+                        <Send className="h-3 w-3 mr-1" />
+                        {sendingReply === reply.id ? 'Sending...' : reply.is_sent ? 'Sent' : 'Send Reply'}
+                      </Button>
                       <Button
                         variant="ghost"
                         size="sm"
