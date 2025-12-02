@@ -17,15 +17,25 @@ serve(async (req) => {
     const TWILIO_AUTH_TOKEN = Deno.env.get('TWILIO_AUTH_TOKEN');
     const TWILIO_WHATSAPP_NUMBER = Deno.env.get('TWILIO_WHATSAPP_NUMBER');
 
+    if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_WHATSAPP_NUMBER) {
+      throw new Error('Missing Twilio credentials');
+    }
+
+    // Ensure 'to' has whatsapp: prefix
+    const formattedTo = to.startsWith('whatsapp:') ? to : `whatsapp:${to}`;
+    const formattedFrom = TWILIO_WHATSAPP_NUMBER.startsWith('whatsapp:') 
+      ? TWILIO_WHATSAPP_NUMBER 
+      : `whatsapp:${TWILIO_WHATSAPP_NUMBER}`;
+
     const url = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`;
     
     const params = new URLSearchParams({
-      From: `whatsapp:${TWILIO_WHATSAPP_NUMBER}`,
-      To: to,
+      From: formattedFrom,
+      To: formattedTo,
       Body: body
     });
 
-    console.log('Sending WhatsApp message to:', to);
+    console.log('Sending WhatsApp message:', { from: formattedFrom, to: formattedTo, body });
 
     const response = await fetch(url, {
       method: 'POST',
@@ -38,6 +48,11 @@ serve(async (req) => {
 
     const data = await response.json();
     console.log('Twilio response:', data);
+
+    if (!response.ok) {
+      console.error('Twilio API error:', data);
+      throw new Error(data.message || 'Failed to send WhatsApp message');
+    }
 
     return new Response(
       JSON.stringify({ success: true, data }), 
