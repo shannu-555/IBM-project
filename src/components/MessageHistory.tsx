@@ -174,6 +174,13 @@ export const MessageHistory = ({ platform }: MessageHistoryProps) => {
     setSendingReply(replyId);
     try {
       if (platform === 'whatsapp') {
+        // Validate phone number format (must start with whatsapp:+ or just +)
+        const isValidPhone = messageSender.includes('+') || messageSender.match(/^\d+$/);
+        
+        if (!isValidPhone) {
+          throw new Error('Invalid phone number. Please send a new WhatsApp message to test the reply feature. Old messages may have usernames instead of phone numbers.');
+        }
+
         const { error } = await supabase.functions.invoke('send-whatsapp-reply', {
           body: { 
             to: messageSender,
