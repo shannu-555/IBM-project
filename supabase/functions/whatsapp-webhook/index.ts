@@ -204,13 +204,13 @@ serve(async (req) => {
 
     console.log('Incoming message:', message);
 
-    // Store message in database
+    // Store message in database with actual phone number for replies
     const { data: storedMessage, error: messageError } = await supabase
       .from('messages')
       .insert({
         user_id: user.id,
         platform: 'whatsapp',
-        sender: message.ProfileName || message.From,
+        sender: message.From, // Always use phone number for sending replies
         content: message.Body,
         message_id: message.MessageSid,
       })
