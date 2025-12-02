@@ -21,21 +21,34 @@ serve(async (req) => {
       throw new Error('Missing Twilio credentials');
     }
 
-    // Ensure 'to' has whatsapp: prefix
-    const formattedTo = to.startsWith('whatsapp:') ? to : `whatsapp:${to}`;
-    const formattedFrom = TWILIO_WHATSAPP_NUMBER.startsWith('whatsapp:') 
-      ? TWILIO_WHATSAPP_NUMBER 
-      : `whatsapp:${TWILIO_WHATSAPP_NUMBER}`;
+    // Basic server-side validation of inputs
+    if (typeof body !== 'string' || !body.trim()) {
+      throw new Error('Message body is required');
+    }
+
+    const sanitizeNumber = (value: string): string => {
+      if (!value) throw new Error('Phone number is required');
+      // Remove zero-width and bidi control characters that can sneak in from copy-paste
+      const cleaned = value.replace(/[\u200B-\u200D\uFEFF\u202A-\u202E]/g, '').trim();
+      return cleaned;
+    };
+
+    const rawTo = sanitizeNumber(to);
+    const rawFrom = sanitizeNumber(TWILIO_WHATSAPP_NUMBER);
+
+    // Ensure numbers have correct whatsapp: prefix
+    const formattedTo = rawTo.startsWith('whatsapp:') ? rawTo : `whatsapp:${rawTo}`;
+    const formattedFrom = rawFrom.startsWith('whatsapp:') ? rawFrom : `whatsapp:${rawFrom}`;
 
     const url = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`;
     
     const params = new URLSearchParams({
       From: formattedFrom,
       To: formattedTo,
-      Body: body
+      Body: body.trim()
     });
 
-    console.log('Sending WhatsApp message:', { from: formattedFrom, to: formattedTo, body });
+    console.log('Sending WhatsApp message via Twilio:', { from: formattedFrom, to: formattedTo });
 
     const response = await fetch(url, {
       method: 'POST',
