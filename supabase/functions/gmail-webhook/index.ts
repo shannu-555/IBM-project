@@ -11,6 +11,8 @@ async function refreshAccessToken(refreshToken: string): Promise<string> {
   const GMAIL_CLIENT_ID = Deno.env.get('GMAIL_CLIENT_ID');
   const GMAIL_CLIENT_SECRET = Deno.env.get('GMAIL_CLIENT_SECRET');
 
+  console.log('Refreshing Gmail access token...');
+  
   const response = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -23,6 +25,13 @@ async function refreshAccessToken(refreshToken: string): Promise<string> {
   });
 
   const data = await response.json();
+  
+  if (data.error) {
+    console.error('Token refresh error:', data.error, data.error_description);
+    throw new Error(`Token refresh failed: ${data.error_description || data.error}`);
+  }
+  
+  console.log('Access token refreshed successfully');
   return data.access_token;
 }
 
@@ -159,6 +168,8 @@ Remember: Sound human, not robotic. Be natural and genuine, not templated.`;
 }
 
 async function fetchUnreadEmails(accessToken: string) {
+  console.log('Fetching unread emails from Gmail API...');
+  
   const response = await fetch(
     'https://gmail.googleapis.com/gmail/v1/users/me/messages?q=is:unread&maxResults=10',
     {
@@ -168,7 +179,20 @@ async function fetchUnreadEmails(accessToken: string) {
 
   const data = await response.json();
   
-  if (!data.messages) return [];
+  // Log the raw response for debugging
+  console.log('Gmail API raw response:', JSON.stringify(data));
+  
+  if (data.error) {
+    console.error('Gmail API error:', data.error.message, data.error.code);
+    throw new Error(`Gmail API error: ${data.error.message}`);
+  }
+  
+  if (!data.messages || data.messages.length === 0) {
+    console.log('No unread messages found in Gmail inbox');
+    return [];
+  }
+  
+  console.log(`Found ${data.messages.length} unread message IDs, fetching details...`);
 
   const emails = await Promise.all(
     data.messages.slice(0, 5).map(async (msg: any) => {
@@ -178,12 +202,14 @@ async function fetchUnreadEmails(accessToken: string) {
           headers: { Authorization: `Bearer ${accessToken}` }
         }
       );
-      return await msgResponse.json();
+      const msgData = await msgResponse.json();
+      console.log(`Fetched email ${msg.id}: Subject="${msgData.payload?.headers?.find((h: any) => h.name === 'Subject')?.value}"`);
+      return msgData;
     })
   );
 
   return emails.map(email => {
-    const headers = email.payload.headers;
+    const headers = email.payload?.headers || [];
     const subject = headers.find((h: any) => h.name === 'Subject')?.value || 'No Subject';
     const from = headers.find((h: any) => h.name === 'From')?.value || 'Unknown';
     const body = email.snippet || '';
