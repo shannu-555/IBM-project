@@ -21,6 +21,9 @@ const Email = () => {
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isFetching, setIsFetching] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
+  const [lastScanTime, setLastScanTime] = useState<Date | null>(null);
+  const [countdown, setCountdown] = useState(15);
   const [status, setStatus] = useState<IntegrationStatus>({
     credentials: 'checking',
     authentication: 'checking',
@@ -32,11 +35,23 @@ const Email = () => {
     checkConnection();
   }, []);
 
+  // Countdown timer
+  useEffect(() => {
+    if (!isConnected) return;
+    
+    const countdownInterval = setInterval(() => {
+      setCountdown(prev => (prev <= 1 ? 15 : prev - 1));
+    }, 1000);
+
+    return () => clearInterval(countdownInterval);
+  }, [isConnected]);
+
   // Real-time polling for new emails when connected
   useEffect(() => {
     if (!isConnected) return;
 
     const pollEmails = async () => {
+      setIsScanning(true);
       try {
         const { data, error } = await supabase.functions.invoke('gmail-webhook');
         if (error) {
@@ -44,8 +59,12 @@ const Email = () => {
         } else if (data?.processed > 0) {
           console.log(`Fetched ${data.processed} new emails`);
         }
+        setLastScanTime(new Date());
+        setCountdown(15);
       } catch (error) {
         console.error('Polling error:', error);
+      } finally {
+        setIsScanning(false);
       }
     };
 
@@ -221,6 +240,25 @@ const Email = () => {
                       Disconnect
                     </Button>
                   </div>
+                </div>
+
+                {/* Scanning Status Indicator */}
+                <div className="flex items-center gap-3 mb-4 p-3 rounded-lg bg-background/80 border">
+                  <div className={`h-3 w-3 rounded-full ${isScanning ? 'bg-green-500 animate-pulse' : 'bg-muted-foreground/30'}`} />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">
+                      {isScanning ? 'Scanning for new emails...' : 'Waiting for next scan'}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {isScanning 
+                        ? 'Checking Gmail inbox' 
+                        : `Next scan in ${countdown}s${lastScanTime ? ` • Last: ${lastScanTime.toLocaleTimeString()}` : ''}`
+                      }
+                    </p>
+                  </div>
+                  <Badge variant={isScanning ? "default" : "secondary"} className="text-xs">
+                    {isScanning ? 'Active' : `${countdown}s`}
+                  </Badge>
                 </div>
 
                 {/* Gmail Integration Status Panel */}
