@@ -238,29 +238,46 @@ serve(async (req) => {
     const emails = await fetchUnreadEmails(accessToken);
     console.log(`Found ${emails.length} unread emails`);
 
-    // Process each email
-    const processedEmails = await Promise.all(
-      emails.map(async (email) => {
-        // Store message in database
-        const { data: storedMessage, error: messageError } = await supabase
-          .from('messages')
-          .insert({
-            user_id: user.id,
-            platform: 'email',
-            sender: email.from,
-            content: email.body,
-            message_id: email.id,
-            thread_id: email.threadId,
-          })
-          .select()
-          .single();
+    // Process each email - skip duplicates
+    const processedEmails = [];
+    
+    for (const email of emails) {
+      // Check if this email already exists in database
+      const { data: existingMessage } = await supabase
+        .from('messages')
+        .select('id')
+        .eq('message_id', email.id)
+        .eq('user_id', user.id)
+        .single();
 
-        if (messageError) {
-          console.error('Error storing email:', messageError);
-          throw messageError;
-        }
+      if (existingMessage) {
+        console.log(`Skipping duplicate email: ${email.id}`);
+        continue;
+      }
 
-        // Generate AI replies using Gemini
+      // Store message in database
+      const { data: storedMessage, error: messageError } = await supabase
+        .from('messages')
+        .insert({
+          user_id: user.id,
+          platform: 'email',
+          sender: email.from,
+          content: email.body,
+          message_id: email.id,
+          thread_id: email.threadId,
+        })
+        .select()
+        .single();
+
+      if (messageError) {
+        console.error('Error storing email:', messageError);
+        continue;
+      }
+
+      console.log(`New email stored: ${storedMessage.id}`);
+
+      // Generate AI replies using Gemini
+      try {
         const replies = await generateGeminiReplies(email.body, email.subject);
         
         // Store replies in database
@@ -278,15 +295,18 @@ serve(async (req) => {
 
         if (repliesError) {
           console.error('Error storing replies:', repliesError);
-          throw repliesError;
+        } else {
+          console.log(`Generated ${replies.length} replies for email ${storedMessage.id}`);
         }
+      } catch (genError) {
+        console.error('Error generating replies:', genError);
+      }
 
-        return {
-          messageId: storedMessage.id,
-          emailId: email.id
-        };
-      })
-    );
+      processedEmails.push({
+        messageId: storedMessage.id,
+        emailId: email.id
+      });
+    }
 
     return new Response(
       JSON.stringify({ 
