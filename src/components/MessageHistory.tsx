@@ -43,7 +43,8 @@ export const MessageHistory = ({ platform }: MessageHistoryProps) => {
   useEffect(() => {
     fetchMessages();
 
-    const channel = supabase
+    // Subscribe to messages changes
+    const messagesChannel = supabase
       .channel(`messages-${platform}`)
       .on(
         'postgres_changes',
@@ -59,8 +60,25 @@ export const MessageHistory = ({ platform }: MessageHistoryProps) => {
       )
       .subscribe();
 
+    // Subscribe to replies changes for instant AI reply updates
+    const repliesChannel = supabase
+      .channel(`replies-${platform}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'replies'
+        },
+        () => {
+          fetchMessages();
+        }
+      )
+      .subscribe();
+
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(messagesChannel);
+      supabase.removeChannel(repliesChannel);
     };
   }, [platform, filterSender, filterSubject, filterDateFrom, filterDateTo]);
 

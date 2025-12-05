@@ -38,14 +38,22 @@ const Email = () => {
 
     const pollEmails = async () => {
       try {
-        await supabase.functions.invoke('gmail-webhook');
+        const { data, error } = await supabase.functions.invoke('gmail-webhook');
+        if (error) {
+          console.error('Polling error:', error);
+        } else if (data?.processed > 0) {
+          console.log(`Fetched ${data.processed} new emails`);
+        }
       } catch (error) {
         console.error('Polling error:', error);
       }
     };
 
-    // Poll every 5 minutes
-    const intervalId = setInterval(pollEmails, 300000);
+    // Initial fetch
+    pollEmails();
+
+    // Poll every 15 seconds for real-time like experience
+    const intervalId = setInterval(pollEmails, 15000);
 
     return () => clearInterval(intervalId);
   }, [isConnected]);
