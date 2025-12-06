@@ -3,8 +3,46 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-twilio-signature',
 };
+
+// Validate Twilio request signature using HMAC-SHA1
+async function validateTwilioSignature(
+  requestUrl: string,
+  params: Record<string, string>,
+  signature: string,
+  authToken: string
+): Promise<boolean> {
+  // Sort parameters alphabetically and concatenate
+  const sortedKeys = Object.keys(params).sort();
+  const paramString = sortedKeys.map(key => key + params[key]).join('');
+  const dataToSign = requestUrl + paramString;
+
+  // Compute HMAC-SHA1 signature
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(authToken),
+    { name: 'HMAC', hash: 'SHA-1' },
+    false,
+    ['sign']
+  );
+  
+  const signatureBuffer = await crypto.subtle.sign(
+    'HMAC',
+    key,
+    encoder.encode(dataToSign)
+  );
+  
+  // Convert to base64 using btoa
+  const bytes = new Uint8Array(signatureBuffer);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  const computedSignature = btoa(binary);
+  return computedSignature === signature;
+}
 
 interface TwilioMessage {
   From: string;
@@ -177,6 +215,52 @@ serve(async (req) => {
   try {
     console.log('Received WhatsApp webhook request from Twilio');
     
+    // Validate Twilio signature
+    const twilioSignature = req.headers.get('x-twilio-signature');
+    const twilioAuthToken = Deno.env.get('TWILIO_AUTH_TOKEN');
+    
+    if (!twilioAuthToken) {
+      console.error('TWILIO_AUTH_TOKEN not configured');
+      throw new Error('Server configuration error');
+    }
+
+    // Clone request to read body twice
+    const clonedReq = req.clone();
+    const formData = await req.formData();
+    
+    // Build params object for signature validation
+    const params: Record<string, string> = {};
+    formData.forEach((value, key) => {
+      params[key] = value.toString();
+    });
+    
+    // Validate signature if present (Twilio always sends it)
+    if (twilioSignature) {
+      const requestUrl = new URL(clonedReq.url).toString();
+      const isValid = await validateTwilioSignature(requestUrl, params, twilioSignature, twilioAuthToken);
+      
+      if (!isValid) {
+        console.error('Invalid Twilio signature - request rejected');
+        return new Response(
+          JSON.stringify({ error: 'Unauthorized - invalid signature' }),
+          {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 403
+          }
+        );
+      }
+      console.log('Twilio signature validated successfully');
+    } else {
+      console.warn('No Twilio signature header present - rejecting request');
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized - missing signature' }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 403
+        }
+      );
+    }
+    
     // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -194,12 +278,11 @@ serve(async (req) => {
     const user = users.users[0];
     console.log('Using user:', user.id);
     
-    const formData = await req.formData();
     const message: TwilioMessage = {
-      From: formData.get('From') as string,
-      Body: formData.get('Body') as string,
-      MessageSid: formData.get('MessageSid') as string,
-      ProfileName: formData.get('ProfileName') as string || undefined,
+      From: params['From'] || '',
+      Body: params['Body'] || '',
+      MessageSid: params['MessageSid'] || '',
+      ProfileName: params['ProfileName'] || undefined,
     };
 
     console.log('Incoming message:', message);

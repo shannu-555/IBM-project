@@ -32,6 +32,25 @@ serve(async (req) => {
   try {
     const { threadId, messageId, replyText } = await req.json();
     
+    // Input validation
+    if (!threadId || typeof threadId !== 'string' || threadId.trim().length === 0) {
+      throw new Error('Valid thread ID is required');
+    }
+    if (!replyText || typeof replyText !== 'string' || replyText.trim().length === 0) {
+      throw new Error('Reply text is required');
+    }
+    if (replyText.length > 50000) {
+      throw new Error('Reply text exceeds maximum length of 50000 characters');
+    }
+    
+    // Sanitize reply text - remove potential email header injection attempts
+    const sanitizedReplyText = replyText
+      .replace(/\r\n/g, '\n')
+      .replace(/\r/g, '\n')
+      .trim();
+    
+    console.log('Validated inputs - threadId:', threadId, 'replyText length:', sanitizedReplyText.length);
+    
     const GMAIL_REFRESH_TOKEN = Deno.env.get('GMAIL_REFRESH_TOKEN');
     if (!GMAIL_REFRESH_TOKEN) {
       throw new Error('Gmail refresh token not configured');
@@ -44,7 +63,7 @@ serve(async (req) => {
       'Content-Type: text/plain; charset=utf-8',
       'MIME-Version: 1.0',
       '',
-      replyText
+      sanitizedReplyText
     ];
     const message = messageParts.join('\n');
     const encodedMessage = btoa(unescape(encodeURIComponent(message)))
